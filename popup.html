@@ -7,5 +7,16 @@
 <li><b>You are responsible</b> for what you download and how you use it.</li>
 <li><b>No warranty.</b> Provided "as is"; the authors aren't liable for any loss.</li>
 <li><b>Privacy:</b> no data is collected or sent anywhere.</li></ol>
-<button id="agree" class="dl">I agree</button></section><main><div id="items"></div><div id="empty"><div class="film" aria-hidden="true">▶</div><h3>No media found yet</h3><p>Play the video on the page. Streams (HLS) and direct video or audio files show up here as they load.</p></div></main>
-<footer><button id="scan" title="Scan the page again">⟳ Scan</button><p id="status" role="status" aria-live="polite">Looking for media…</p><span id="count" title="Items found">0</span></footer><p id="terms-note">By using Grabbit you agree to the <a href="#" id="show-terms">Terms of Service</a>.</p><script src="popup.js" type="module"></script></body></html>
+<button id="agree" class="grab">I agree</button></section>
+<div id="app">
+<header class="topbar"><div class="brand"><img class="logo" src="icons/icon32.png" alt="">Grabbit</div>
+<button id="scan" class="icon" title="Scan the page again" aria-label="Scan the page again"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+<button id="clear" class="icon" title="Clear the list" aria-label="Clear the list"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+<button id="show-terms" class="icon" title="Terms of Service" aria-label="Terms of Service"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5"/></svg></button></header>
+<nav id="tabs" role="tablist" aria-label="Media type">
+<button role="tab" data-cat="videos">Videos <span>0</span></button><button role="tab" data-cat="audio">Audio <span>0</span></button><button role="tab" data-cat="images">Images <span>0</span></button><button role="tab" data-cat="fonts">Fonts <span>0</span></button></nav>
+<div class="filters"><input id="search" type="search" placeholder="Search" aria-label="Search"><select id="sort" aria-label="Sort by"><option value="largest">Largest</option><option value="smallest">Smallest</option><option value="name">Name</option></select></div>
+<div class="bulk"><label><input type="checkbox" id="all"> Select all</label><span class="actions"><button id="zip" title="Save the selected files as one .zip" disabled>ZIP</button><button id="grab-selected" class="grab" disabled>Grab selected</button></span></div>
+<main><div id="items"></div><div id="empty"><p id="empty-text"></p></div></main>
+<footer><p id="status" role="status" aria-live="polite">Looking for media…</p><p id="terms-note">By using Grabbit you agree to the <a href="#" id="terms-link">Terms of Service</a>.</p></footer>
+</div><script src="popup.js" type="module"></script></body></html>

@@ -1,10 +1,12 @@
-import {parseM3u8} from './core.mjs';
+import {parseM3u8, safeName} from './core.mjs';
+import {crc32, zip} from './zip.mjs';
 import {mergeFmp4} from './fmp4.mjs';
 // Downloads HLS streams and video+audio pairs, joins them, and hands the file to Chrome's downloads.
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return;
   if (m.type === 'hls-start') { job(m.job, hls); reply({}); }
   if (m.type === 'merge-start') { job(m.job, pair); reply({}); }
+  if (m.type === 'zip-start') { job(m.job, bundle); reply({}); }
   if (m.type === 'revoke') URL.revokeObjectURL(m.blobUrl);
 });
 const report = (key, job) => chrome.runtime.sendMessage({type:'hls-progress', key, job});
@@ -68,8 +70,22 @@ async function pair({videoUrl, audioUrl, name}, progress) {
   await save(await mergeFmp4(video, audio), name, 'mp4');
 }
 
+// Downloads the files one by one and saves them as a single .zip.
+async function bundle({files, name}, progress) {
+  const out = [];
+  for (const [i, f] of files.entries()) {
+    let crc = 0;
+    const blob = await fetchBlob(f.url, (n, total) => total && progress((i + n / total) / files.length * .97), chunk => { crc = crc32(chunk, crc); });
+    // Unknown extension: take it from the server's content type (image/jpeg -> jpg).
+    const ext = f.ext || {jpeg:'jpg', 'svg+xml':'svg', 'x-icon':'ico', mpeg:'mp3'}[blob.type.split('/')[1]?.split(';')[0]] || blob.type.split('/')[1]?.split(/[;+]/)[0] || 'bin';
+    out.push({name:safeName(f.name, ext), blob, crc});
+    progress((i + 1) / files.length * .97);
+  }
+  await save(zip(out), name, 'zip');
+}
+
 // shortcut: a dropped connection fails the whole file (no resume); fine for normal connections.
-async function fetchBlob(url, onProgress) {
+async function fetchBlob(url, onProgress, onChunk) {
   const r = await fetch(url, {credentials:'include'});
   if (!r.ok) throw new Error(`Server refused the file (HTTP ${r.status}).`);
   const total = Number(r.headers.get('content-length')) || 0, reader = r.body.getReader(), parts = [];
@@ -78,11 +94,12 @@ async function fetchBlob(url, onProgress) {
     const {done, value} = await reader.read();
     if (done) break;
     chunks.push(value); n += value.length; pending += value.length;
+    onChunk?.(value);
     if (pending > 32e6) { parts.push(new Blob(chunks)); chunks = []; pending = 0; }
     onProgress(n, total);
   }
   parts.push(new Blob(chunks));
-  return new Blob(parts);
+  return new Blob(parts, {type:r.headers.get('content-type') || ''});
 }
 
 async function fetchBytes(url, tries = 4) {

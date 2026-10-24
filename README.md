@@ -16,13 +16,17 @@ Keep the extracted folder: Chrome loads the extension from there.
 
 ## Use
 
-1. Reload the video page after installing the extension, then start playing the video. The badge counts what was found.
-2. Click Grabbit. Each find shows as a card: thumbnail, page title, size or duration, and an **HLS** or **HTTP** tag.
-3. For HLS streams, pick a quality (1080p, 720p, ...), then click **Download**. Progress shows on the card, and you can close the popup while it runs.
-4. Files go to your Downloads folder. Use **×** to remove a card and **Scan** to check the page again.
+1. Reload the page after installing, then start playing the video. The badge counts the media found.
+2. Click Grabbit. The panel has four tabs: **Videos**, **Audio**, **Images** and **Fonts**, each with a count.
+3. Search by name and sort by **Largest**, **Smallest** or **Name**.
+4. Press **Grab** on a row, or tick rows (or **Select all**) and press **Grab selected**, or **ZIP** to get them as one .zip file. Streams and video+audio merges can't go in the zip and download as separate files.
+5. Streams get a quality picker; video-only files get a **+ Audio** picker so the saved MP4 has sound.
+6. The top bar has **Scan** (check the page again), **Clear** (empty the list) and the Terms of Service.
 
 ## Scope and limitations
 
+- **Images**: Grabbit saves the real image where the page reveals it, not the thumbnail: a link around the thumbnail that points to the image file, zoom/full-size attributes (`data-zoom-image`, `data-full`, `data-large`, `data-original`, ...) or the widest `srcset` entry. CSS background images and the page's share image are listed too. Icons under 16 px are skipped. When a site only ever loads small versions, the small version is what you get.
+- **Fonts**: web font files (woff2, woff, ttf, otf) the page has loaded.
 - **HTTP**: direct video/audio files (mp4, webm, mov, mkv, mp3, m4a, ogg, opus, wav, flac) are handed to Chrome's downloader.
 - **HLS** (`.m3u8`): the chosen quality is downloaded segment by segment, AES-128 parts are decrypted, and everything is joined into one file. Streams with fMP4 segments become `.mp4`. Classic MPEG-TS streams are saved as `.ts`, which plays in VLC and Windows Media Player; convert it with `ffmpeg -i in.ts -c copy out.mp4` if you need MP4.
 - **Separate picture and sound.** Many sites serve video and audio as two files. Cards are tagged **VIDEO ONLY** or **AUDIO**. A video-only card gets a "+ Audio" picker, and **Download** saves one `.mp4` with sound. The result is a regular (non-fragmented) MP4 that plays in Windows Media Player, VLC and browsers. The merge runs in the browser with no ffmpeg needed, for fragmented MP4 (DASH-style) files and fMP4 HLS streams.

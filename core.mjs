@@ -13,8 +13,8 @@ export function mediaKind(url, type = '') {
   if (/\.(mp4|m4v|webm|mov|mkv|mp3|m4a|ogg|oga|opus|wav|flac)$/i.test(path) || /^(video|audio)\//i.test(type)) return 'http';
   return null;
 }
-export function extOf(url) {
-  try { return /\.([a-z0-9]{2,4})$/i.exec(new URL(url).pathname)?.[1].toLowerCase() || 'mp4'; } catch { return 'mp4'; }
+export function extOf(url, fallback = 'mp4') {
+  try { return /\.([a-z0-9]{2,5})$/i.exec(new URL(url).pathname)?.[1].toLowerCase() || fallback; } catch { return fallback; }
 }
 export function baseName(url) {
   try { return decodeURIComponent(new URL(url).pathname.split('/').pop()).replace(/\.[^.]*$/, ''); } catch { return ''; }

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Grabbit",
+  "version": "1.0.0",
+  "description": "Grab videos, streams and audio from the current page and save them with Chrome.",
+  "minimum_chrome_version": "116",
+  "permissions": ["downloads", "webRequest", "storage", "scripting", "activeTab", "offscreen", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_title": "Grabbit", "default_popup": "popup.html"}
+}

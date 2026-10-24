@@ -1,10 +1,11 @@
 import {isYouTube} from './core.mjs';
 const $ = id => document.getElementById(id);
-let tab, media = [], images = [], fonts = [], jobs = {}, thumb = '', cat = 'videos', last = '', shotTried = false;
+let tab, media = [], images = [], fonts = [], files = [], jobs = {}, thumb = '', cat = 'videos', last = '', shotTried = false;
 const choice = new Map(), audioChoice = new Map(), picked = new Set(); // survive re-renders
 const EMPTY = {
   videos:'No videos yet. Play the video on the page; streams and video files show up here as they load.',
   audio:'No audio files found on this page.', images:'No images found on this page.', fonts:'No web fonts found on this page.',
+  files:'No files or download links found on this page.',
 };
 async function send(type, extra = {}) {
   const result = await chrome.runtime.sendMessage({type, tabId:tab.id, ...extra});
@@ -18,7 +19,7 @@ const size = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1
 const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 const isAudio = m => m.av ? m.av.audio && !m.av.video : /^(mp3|m4a|ogg|oga|opus|wav|flac|aac)$/.test(m.ext);
 const sounds = () => media.filter(x => x.av?.audio && !x.av.video && x.av.frag);
-const lists = () => ({videos:media.filter(m => !isAudio(m)), audio:media.filter(isAudio), images, fonts});
+const lists = () => ({videos:media.filter(m => !isAudio(m)), audio:media.filter(isAudio), images, fonts, files});
 // "Largest": file size, else stream length, else pixels (full-size images of unknown size rank high).
 const weight = x => x.size || (x.duration || 0) * 1e5 || (x.w || 0) * (x.h || 0) || (x.upgraded ? 4e6 : 0);
 function visible() {
@@ -29,7 +30,7 @@ function visible() {
 
 function render() {
   const shown = visible();
-  const state = JSON.stringify([media, images, fonts, jobs, thumb, cat, [...picked], $('search').value, $('sort').value]);
+  const state = JSON.stringify([media, images, fonts, files, jobs, thumb, cat, [...picked], $('search').value, $('sort').value]);
   if (state === last) return;
   last = state;
   const all = lists();
@@ -61,10 +62,10 @@ function row(x) {
   const th = el('div', 'thumb ' + cat);
   const src = cat === 'images' ? x.preview : cat === 'videos' ? thumb : '';
   if (src) th.append(Object.assign(el('img'), {src, alt:'', loading:'lazy', onerror:cat === 'videos' ? useScreenshot : () => { th.textContent = '▣'; }}));
-  else th.textContent = {videos:'▶', audio:'♪', images:'▣', fonts:'Aa'}[cat];
+  else th.textContent = {videos:'▶', audio:'♪', images:'▣', fonts:'Aa', files:(x.ext || '⤓').slice(0, 4).toUpperCase()}[cat];
 
   const info = el('div', 'info'), meta = el('div', 'meta');
-  meta.append(el('span', 'tag', x.kind === 'hls' ? 'HLS' : (x.ext || '?').toUpperCase()));
+  meta.append(el('span', 'tag', x.kind === 'hls' ? 'HLS' : (x.ext || (cat === 'files' ? 'LINK' : '?')).toUpperCase()));
   if (x.av?.video && !x.av.audio) meta.append(el('span', 'tag only', 'VIDEO ONLY'));
   const facts = [x.duration && time(x.duration), x.w && x.h && `${x.w}×${x.h}`, x.size && size(x.size), x.upgraded && !x.w && 'full size', host(x.url)];
   meta.append(facts.filter(Boolean).join(' · '));
@@ -143,15 +144,24 @@ async function scan() {
   $('scan').disabled = true;
   try {
     const r = await send('scan');
-    ({items:media, images, fonts} = r); thumb = r.thumb || thumb;
+    ({items:media, images, fonts, files = []} = r); thumb = r.thumb || thumb;
     status(media.length + images.length ? 'Pick what to grab.' : 'Nothing yet. Play the video, then press Scan.');
   } catch { status('Can’t scan this page. Open a regular website, reload it and play the video.'); }
   if (!thumb) await useScreenshot(); else render();
   $('scan').disabled = false;
 }
 
+// The same page runs as the toolbar popup and in Chrome's side panel.
+const inSidebar = !chrome.extension.getViews({type:'popup'}).includes(window);
+document.documentElement.classList.toggle('sidebar', inSidebar);
+$('sidebar').hidden = inSidebar;
+$('sidebar').onclick = () => { chrome.sidePanel.open({windowId:tab.windowId}).then(() => window.close(), e => status(e.message)); };
+if (inSidebar) { // follow the user to whatever tab they look at next
+  chrome.tabs.onActivated.addListener(() => location.reload());
+  chrome.tabs.onUpdated.addListener((id, info) => { if (id === tab?.id && info.status === 'complete') location.reload(); });
+}
 $('scan').onclick = scan;
-$('clear').onclick = async () => { await send('clear').catch(e => status(e.message)); images = []; fonts = []; picked.clear(); render(); };
+$('clear').onclick = async () => { await send('clear').catch(e => status(e.message)); images = []; fonts = []; files = []; picked.clear(); render(); };
 for (const b of $('tabs').children) b.onclick = () => { cat = b.dataset.cat; render(); };
 $('search').oninput = $('sort').onchange = render;
 $('all').onchange = () => { for (const x of visible()) $('all').checked ? picked.add(x.url) : picked.delete(x.url); render(); };

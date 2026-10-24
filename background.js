@@ -101,12 +101,12 @@ chrome.downloads.onChanged.addListener(async d => {
 async function handle({type, tabId:id, url, variant, audio, name, files}) {
   if (type === 'list') return {items:await list(id)};
   if (type === 'clear') { await serial(() => put(id, [])); return {}; }
-  if (type === 'grab-url') { // images and fonts: a plain download
+  if (type === 'grab-url') { // images, fonts and files: a plain download
     if (!httpUrl(url) || isYouTube(url) || isYouTube((await chrome.tabs.get(id)).url)) throw new Error('This file can’t be downloaded.');
     await referer(id);
     const ext = extOf(url, '');
     // Without a known extension, let Chrome name the file from the server's headers.
-    const filename = /^(jpe?g|png|gif|webp|avif|bmp|svg|ico|tiff?|woff2?|ttf|otf|eot)$/.test(ext) ? safeName(name, ext) : undefined;
+    const filename = /^(jpe?g|png|gif|webp|avif|bmp|svg|ico|tiff?|woff2?|ttf|otf|eot|pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|csv|txt|epub|zip|rar|7z|tar|gz)$/.test(ext) ? safeName(name, ext) : undefined;
     await chrome.downloads.download({url, filename, conflictAction:'uniquify'});
     return {};
   }
@@ -124,7 +124,7 @@ async function handle({type, tabId:id, url, variant, audio, name, files}) {
   }
   if (type === 'remove') { await serial(async () => put(id, (await list(id)).filter(x => x.url !== url))); return {}; }
   if (type === 'scan') {
-    if (isYouTube((await chrome.tabs.get(id)).url)) return {items:[], thumb:'', images:[], fonts:[]};
+    if (isYouTube((await chrome.tabs.get(id)).url)) return {items:[], thumb:'', images:[], fonts:[], files:[]};
     const results = await chrome.scripting.executeScript({target:{tabId:id, allFrames:true}, func:scanPage});
     const have = await list(id);
     const urls = [...new Set(results.flatMap(r => r.result?.urls || []))].filter(u => mediaKind(u) && !known(have, u));
@@ -137,7 +137,13 @@ async function handle({type, tabId:id, url, variant, audio, name, files}) {
       if (!isYouTube(im.url) && (!old || im.w * im.h > old.w * old.h)) images.set(im.url, {...im, name:realName(im.url) || baseName(im.url) || 'image', ext:extOf(im.url, '')});
     }
     const fonts = [...new Set(results.flatMap(r => r.result?.fonts || []))].map(u => ({url:u, name:baseName(u) || 'font', ext:extOf(u, '')}));
-    return {items:await list(id), thumb:thumbs.find(t => t.startsWith('data:')) || thumbs[0] || '', images:[...images.values()], fonts};
+    const files = new Map();
+    for (const f of results.flatMap(r => r.result?.files || [])) {
+      if (files.has(f.url) || isYouTube(f.url)) continue;
+      const ext = extOf(f.url, '');
+      files.set(f.url, {url:f.url, name:realName(f.url) || f.label || baseName(f.url) || 'file', ext:/^(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|csv|txt|epub|zip|rar|7z|tar|gz)$/.test(ext) ? ext : ''});
+    }
+    return {items:await list(id), thumb:thumbs.find(t => t.startsWith('data:')) || thumbs[0] || '', images:[...images.values()], fonts, files:[...files.values()]};
   }
   if (type === 'download') {
     const item = (await list(id)).find(x => x.url === url);
@@ -180,9 +186,11 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
   return true;
 });
 
-// Runs inside the page: lists media URLs, images (full-size where the page reveals one), fonts, and a video thumbnail.
+// Runs inside the page: lists media URLs, images (full-size where the page reveals one), fonts, files/download links, and a video thumbnail.
 function scanPage() {
-  const found = new Set(), videos = [], images = new Map(), fonts = new Set();
+  const found = new Set(), videos = [], images = new Map(), fonts = new Set(), files = new Map();
+  const DOC = /\.(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|csv|txt|epub|zip|rar|7z|tar|gz)$/i, MEDIA = /\.(m3u8|mp4|m4v|webm|mov|mkv|mp3|m4a|ogg|opus|wav|flac|jpe?g|png|gif|webp|avif|bmp|svg)$/i;
+  const RISKY = /\.(exe|msi|msix|dmg|pkg|apk|appx|bat|cmd|com|scr|ps1|vbs|jar|sh|deb|rpm)$/i; // never offer programs
   const abs = v => { try { const u = new URL(v, document.baseURI); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; } };
   const take = v => { const u = abs(v); if (u && /\.(m3u8|mp4|m4v|webm|mov|mkv|mp3|m4a|ogg|opus|wav|flac)$/i.test(new URL(u).pathname)) found.add(u); };
   const addImage = (src, w, h, preview, upgraded) => {
@@ -198,6 +206,15 @@ function scanPage() {
   function visit(root) {
     for (const el of root.querySelectorAll('video, audio, video source, audio source, a[href], [data-src]')) take(el.currentSrc || el.src || el.href || el.getAttribute('data-src'));
     videos.push(...root.querySelectorAll('video'));
+    for (const a of root.querySelectorAll('a[href]')) {
+      // Files (pdf, docx, zip...) and links meant as downloads: download attribute, "Download" label or URL.
+      const url = abs(a.href);
+      if (!url || url.split('#')[0] === location.href.split('#')[0]) continue;
+      const path = new URL(url).pathname;
+      if (RISKY.test(path) || MEDIA.test(path)) continue;
+      const label = (a.getAttribute('download') || a.textContent || a.title || a.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (DOC.test(path) || a.hasAttribute('download') || /\bdownload\b/i.test(label) || /\/downloads?\b|[?&](download|dl)=/i.test(url)) files.set(url, {url, label});
+    }
     for (const img of root.querySelectorAll('img')) {
       // Prefer the real image over the thumbnail: a link to the file, a zoom/full attribute, the widest srcset entry.
       const shown = img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
@@ -221,6 +238,7 @@ function scanPage() {
   for (const r of performance.getEntriesByType('resource')) {
     take(r.name);
     if (/\.(woff2?|ttf|otf|eot)([?#]|$)/i.test(r.name)) fonts.add(abs(r.name));
+    else { const u = abs(r.name); if (u && DOC.test(new URL(u).pathname) && !files.has(u)) files.set(u, {url:u, label:''}); }
   }
   const og = document.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
   if (og) addImage(og, 0, 0, og, true);
@@ -231,5 +249,5 @@ function scanPage() {
     c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); thumb = c.toDataURL('image/jpeg', .7);
   } catch {} // cross-origin video taints the canvas
   thumb ||= videos.find(v => v.poster)?.poster || (og ? abs(og) : '');
-  return {urls:[...found].slice(0, 150), thumb, images:[...images.values()].slice(0, 300), fonts:[...fonts].filter(Boolean).slice(0, 100)};
+  return {urls:[...found].slice(0, 150), thumb, images:[...images.values()].slice(0, 300), fonts:[...fonts].filter(Boolean).slice(0, 100), files:[...files.values()].slice(0, 200)};
 }

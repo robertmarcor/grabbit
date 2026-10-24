@@ -37,3 +37,10 @@ footer{padding:8px 12px;border-top:1px solid var(--line);margin-top:6px}
 #tos ol{margin:0 0 14px;padding-left:18px;line-height:1.5}#tos li{margin-bottom:6px}#tos .grab{width:100%}
 [hidden]{display:none!important}
 .actions{display:flex;gap:8px}#zip{border-radius:16px;padding:6px 14px;font-weight:600}
+.thumb.files{background:#2a2540;color:#b9a4ff;font-size:12px}
+html.sidebar body{width:auto}html.sidebar main{max-height:none}
+@media (max-width:460px){
+#tabs button{padding:6px 2px;font-size:12px;white-space:nowrap}#tabs span{margin-left:2px;padding:0 5px}
+.item{grid-template-columns:auto 52px 1fr auto;gap:8px}.thumb{width:52px;height:34px}
+.item>select{grid-column:3;grid-row:2;justify-self:start}.item>span:empty{display:none}
+}
